@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="ノベ磁針(仮)">
+  <rect width="128" height="128" rx="24" fill="#2b7f76" />
+  <path
+    d="M31 39c15-9 30-9 45 0v52c-15-8-30-8-45 0V39Zm66 0c-8-5-15-7-21-7v59c7 0 14 2 21 7V39Z"
+    fill="none"
+    stroke="#ffffff"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    stroke-width="7"
+  />
+  <path
+    d="M64 44v34m-23 9 48-48"
+    fill="none"
+    stroke="#f4c76f"
+    stroke-linecap="round"
+    stroke-width="7"
+  />
+</svg>
