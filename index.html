@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ノベ磁針(仮)</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 48 48" role="img">
+              <path d="M10 8h17c6.1 0 11 4.9 11 11v20H21c-6.1 0-11-4.9-11-11V8Z" />
+              <path d="M18 17h12M18 24h15M18 31h10" />
+            </svg>
+          </div>
+          <div>
+            <label class="eyebrow" for="projectName">ノベ磁針(仮)</label>
+            <input id="projectName" class="project-name" autocomplete="off" />
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <button class="support-button" id="supportButton" type="button" aria-expanded="false" aria-controls="supportBanner">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M7 8h9a4 4 0 0 1 0 8H9a4 4 0 0 1-4-4V8h2Zm9 2v4a2 2 0 0 0 0-4ZM6 19h13" />
+            </svg>
+            <span>開発者を応援</span>
+          </button>
+          <button class="icon-button" id="exportButton" type="button" aria-label="JSONを書き出し" title="JSONを書き出し">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 3v12m0 0 4-4m-4 4-4-4M5 21h14" />
+            </svg>
+          </button>
+          <label class="icon-button file-button" aria-label="JSONを読み込み" title="JSONを読み込み">
+            <input id="importInput" type="file" accept="application/json,.json" />
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 21V9m0 0 4 4m-4-4-4 4M5 3h14" />
+            </svg>
+          </label>
+          <button class="icon-button danger-lite" id="resetButton" type="button" aria-label="初期化" title="初期化">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3 6h18M8 6V4h8v2m-7 4v8m6-8v8M6 6l1 15h10l1-15" />
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <div class="support-banner" id="supportBanner" hidden>
+        <span>このツールは無料で使えます。気に入ったらgiftyで応援お願いします。</span>
+        <a href="https://giftee.com/u/mura_same" target="_blank" rel="noopener noreferrer">gifteeで応援する</a>
+      </div>
+
+      <main class="workspace">
+        <aside class="sidebar" aria-label="キャラクター">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Characters</p>
+              <h2>キャラクター</h2>
+            </div>
+            <div class="panel-actions">
+              <button class="accordion-toggle mobile-only" id="characterListToggleButton" type="button" aria-expanded="false" aria-controls="characterList">
+                <span>一覧</span>
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </button>
+              <button class="icon-button compact" id="addCharacterButton" type="button" aria-label="キャラクター追加" title="キャラクター追加">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div id="characterList" class="character-list"></div>
+        </aside>
+
+        <section class="main-panel">
+          <nav class="tabs" aria-label="表示切替">
+            <button class="tab active" type="button" data-tab="scenes">シーン</button>
+            <button class="tab" type="button" data-tab="source">キャラ検出</button>
+            <button class="tab" type="button" data-tab="appellations">呼称表</button>
+            <button class="tab" type="button" data-tab="overview">最終登場</button>
+            <button class="tab" type="button" data-tab="timeline">検索</button>
+            <button class="tab" type="button" data-tab="terms">用語</button>
+            <button class="tab" type="button" data-tab="settings">設定</button>
+          </nav>
+
+          <section class="tab-panel" id="overviewPanel" aria-labelledby="overview">
+            <div class="stats-grid" id="statsGrid"></div>
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Last Seen</p>
+                <h1>最後に出てきた場所</h1>
+              </div>
+              <select id="overviewSort" class="control">
+                <option value="recent">最近の登場順</option>
+                <option value="name">名前順</option>
+              </select>
+            </div>
+            <div id="lastSeenGrid" class="card-grid"></div>
+          </section>
+
+          <section class="tab-panel" id="sourcePanel" aria-labelledby="source">
+            <div class="source-layout">
+              <form id="sourceForm" class="panel-block source-form">
+                <div class="section-heading compact-heading">
+                  <div>
+                    <p class="eyebrow">Source</p>
+                    <h2>解析用本文</h2>
+                  </div>
+                </div>
+                <label>
+                  <span>登録済みシーンから本文を取り込む</span>
+                  <select id="sourceSceneSelect" class="control"></select>
+                </label>
+                <label class="source-text-label">
+                  <span>本文</span>
+                  <textarea id="sourceText" class="control source-text" spellcheck="false"></textarea>
+                </label>
+                <div class="source-counts" aria-live="polite">
+                  <span id="sourceCountWithWhitespace">空白、改行含む 0文字</span>
+                  <span id="sourceCountWithoutWhitespace">空白、改行なし 0文字</span>
+                </div>
+                <label>
+                  <span>名前候補の抽出</span>
+                  <select id="nameExtractionMode" class="control">
+                    <option value="strict">控えめ</option>
+                    <option value="balanced">標準</option>
+                    <option value="wide">広め</option>
+                  </select>
+                </label>
+                <div class="form-actions source-actions">
+                  <button class="primary-button" id="extractNamesButton" type="button">名前候補</button>
+                  <button class="text-button" id="extractAppellationsButton" type="button">呼称候補</button>
+                  <button class="text-button danger" id="clearSourceButton" type="button">本文を空にする</button>
+                </div>
+              </form>
+
+              <div class="source-results">
+                <div class="panel-block result-panel names-panel">
+                  <div class="section-heading compact-heading">
+                    <div>
+                      <p class="eyebrow">Names</p>
+                      <h2>名前候補</h2>
+                    </div>
+                    <div class="header-actions">
+                      <button class="text-button" id="checkAllSourceNameCandidatesButton" type="button">全てチェック</button>
+                      <button class="text-button" id="uncheckAllSourceNameCandidatesButton" type="button">全て外す</button>
+                      <button class="text-button" id="addSourceNameCandidatesButton" type="button">選択を追加</button>
+                      <button class="text-button danger" id="ignoreSourceNameCandidatesButton" type="button">人名ではない</button>
+                    </div>
+                  </div>
+                  <div id="sourceNameCandidates" class="candidate-list"></div>
+                </div>
+
+                <div class="panel-block result-panel ignore-panel">
+                  <div class="section-heading compact-heading">
+                    <div>
+                      <p class="eyebrow">Ignore</p>
+                      <h2>除外した語</h2>
+                    </div>
+                  </div>
+                  <div id="ignoredNameList" class="ignored-name-list"></div>
+                </div>
+
+                <div class="panel-block result-panel feedback-block">
+                  <div class="section-heading compact-heading">
+                    <div>
+                      <p class="eyebrow">Feedback</p>
+                      <h2>精度向上フィードバック</h2>
+                    </div>
+                    <span id="feedbackPendingBadge" class="status-badge">未送信 0</span>
+                  </div>
+                  <p class="feedback-note">送信ボタンを押した時だけ、本文を含まない判定情報を送ります。</p>
+                  <div class="form-actions source-actions">
+                    <button class="text-button" id="sendFeedbackButton" type="button">未送信を送信</button>
+                    <button class="text-button danger" id="clearSentFeedbackButton" type="button">送信済みを削除</button>
+                  </div>
+                  <div id="feedbackQueueList" class="feedback-list"></div>
+                </div>
+
+                <div class="panel-block result-panel addressing-panel">
+                  <div class="section-heading compact-heading">
+                    <div>
+                      <p class="eyebrow">Addressing</p>
+                      <h2>呼称候補</h2>
+                    </div>
+                    <button class="text-button" id="addSourceAppellationCandidatesButton" type="button">選択を反映</button>
+                  </div>
+                  <div id="sourceAppellationCandidates" class="appellation-candidate-list"></div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="tab-panel active" id="scenesPanel" aria-labelledby="scenes">
+            <div class="split-view">
+              <div class="panel-block scene-list-block">
+                <div class="panel-header">
+                  <div>
+                    <p class="eyebrow">Scenes</p>
+                    <h2>シーン</h2>
+                  </div>
+                  <div class="panel-actions">
+                    <button class="accordion-toggle mobile-only" id="sceneListToggleButton" type="button" aria-expanded="false" aria-controls="sceneList">
+                      <span>一覧</span>
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
+                    </button>
+                    <button class="icon-button compact" id="addSceneButton" type="button" aria-label="シーン追加" title="シーン追加">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 5v14M5 12h14" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <div id="sceneList" class="scene-list"></div>
+              </div>
+
+              <form id="sceneForm" class="panel-block editor-form">
+                <div class="scene-title-row">
+                  <label class="scene-title-field">
+                    <span>話数</span>
+                    <input id="sceneTitle" class="control" type="text" autocomplete="off" required />
+                  </label>
+                  <button class="icon-button compact scene-tools-toggle" id="sceneToolsToggleButton" type="button" aria-label="執筆メニュー" title="執筆メニュー" aria-expanded="false" aria-controls="sceneTools">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M12 8.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7Z" />
+                      <path d="M19 12a7.1 7.1 0 0 0-.1-1.2l2-1.5-2-3.5-2.4 1a7.3 7.3 0 0 0-2-1.2L14.2 3h-4.4l-.4 2.6a7.3 7.3 0 0 0-2 1.2l-2.4-1-2 3.5 2 1.5A7.1 7.1 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.5 2.4-1a7.3 7.3 0 0 0 2 1.2l.4 2.6h4.4l.4-2.6a7.3 7.3 0 0 0 2-1.2l2.4 1 2-3.5-2-1.5c.1-.4.1-.8.1-1.2Z" />
+                    </svg>
+                  </button>
+                </div>
+                <label>
+                  <span>タイトル</span>
+                  <input id="sceneSummary" class="control" type="text" autocomplete="off" />
+                </label>
+                <div id="sceneTools" class="scene-tools" hidden>
+                  <div class="form-actions scene-tool-actions">
+                    <button class="text-button" id="toggleReplaceButton" type="button" aria-expanded="false">置換</button>
+                    <button class="text-button" id="indentParagraphsButton" type="button">段落の字下げ</button>
+                    <button class="text-button" id="undoSceneTextButton" type="button" disabled>直前操作を戻す</button>
+                  </div>
+                  <div id="replacePanel" class="replace-panel" hidden>
+                    <label>
+                      <span>検索文字列</span>
+                      <input id="replaceSearch" class="control" type="text" autocomplete="off" />
+                    </label>
+                    <span class="replace-arrow" aria-hidden="true">→</span>
+                    <label>
+                      <span>変換文字列</span>
+                      <input id="replaceValue" class="control" type="text" autocomplete="off" />
+                    </label>
+                    <button class="primary-button" id="applyReplaceButton" type="button">変換</button>
+                  </div>
+                </div>
+                <label>
+                  <span>本文</span>
+                  <textarea id="sceneText" class="control manuscript" spellcheck="false"></textarea>
+                </label>
+                <div class="source-counts scene-counts" aria-live="polite">
+                  <span id="sceneCountWithWhitespace">空白、改行含む 0文字</span>
+                  <span id="sceneCountWithoutWhitespace">空白、改行なし 0文字</span>
+                </div>
+                <div class="character-picker">
+                  <div class="picker-header">
+                    <span>登場キャラ</span>
+                    <button class="text-button" id="detectCharactersButton" type="button">本文から検出</button>
+                  </div>
+                  <div id="sceneCharacterChecks" class="check-grid"></div>
+                </div>
+                <div class="form-actions delete-actions">
+                  <label class="delete-confirm">
+                    <input id="deleteSceneConfirm" type="checkbox" />
+                    <span>削除を有効にする</span>
+                  </label>
+                  <button class="text-button danger" id="deleteSceneButton" type="button">削除</button>
+                </div>
+              </form>
+            </div>
+          </section>
+
+          <section class="tab-panel" id="appellationsPanel" aria-labelledby="appellations">
+            <div class="appellation-layout">
+              <form id="appellationForm" class="panel-block appellation-form">
+                <div class="section-heading compact-heading">
+                  <div>
+                    <p class="eyebrow">Addressing</p>
+                    <h2>呼称登録</h2>
+                  </div>
+                </div>
+                <div class="form-row two">
+                  <label>
+                    <span>呼ぶ側</span>
+                    <select id="fromCharacter" class="control"></select>
+                  </label>
+                  <label>
+                    <span>呼ばれる側</span>
+                    <select id="toCharacter" class="control"></select>
+                  </label>
+                </div>
+                <label>
+                  <span>呼称</span>
+                  <input id="appellationValue" class="control" type="text" autocomplete="off" />
+                </label>
+                <label>
+                  <span>根拠シーン</span>
+                  <select id="appellationScene" class="control"></select>
+                </label>
+                <label class="appellation-note-field">
+                  <span>メモ</span>
+                  <textarea id="appellationNote" class="control short-text"></textarea>
+                </label>
+                <div class="form-actions">
+                  <button class="primary-button" type="submit">保存</button>
+                  <button class="text-button danger" id="clearAppellationButton" type="button">空にする</button>
+                </div>
+              </form>
+
+              <div class="panel-block matrix-block">
+                <div class="section-heading compact-heading">
+                  <div>
+                    <p class="eyebrow">Matrix</p>
+                    <h2>呼称マトリクス</h2>
+                  </div>
+                  <button class="text-button danger" id="hideSelectedMatrixCharacterButton" type="button">選択キャラを非表示</button>
+                </div>
+                <div id="hiddenMatrixCharacters" class="hidden-character-list"></div>
+                <div id="appellationMatrix" class="matrix-wrap"></div>
+              </div>
+            </div>
+          </section>
+
+          <section class="tab-panel" id="timelinePanel" aria-labelledby="timeline">
+            <div class="filters">
+              <label>
+                <span>本文検索</span>
+                <input id="timelineQuery" class="control" type="search" autocomplete="off" />
+              </label>
+              <label>
+                <span>キャラ</span>
+                <select id="timelineCharacter" class="control"></select>
+              </label>
+              <label>
+                <span>同時登場</span>
+                <select id="timelinePartner" class="control"></select>
+              </label>
+            </div>
+            <div id="timelineList" class="timeline-list"></div>
+          </section>
+
+          <section class="tab-panel" id="termsPanel" aria-labelledby="terms">
+            <div class="split-view">
+              <div class="panel-block scene-list-block">
+                <div class="panel-header">
+                  <div>
+                    <p class="eyebrow">Terms</p>
+                    <h2>用語</h2>
+                  </div>
+                  <button class="icon-button compact" id="addTermButton" type="button" aria-label="用語追加" title="用語追加">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M12 5v14M5 12h14" />
+                    </svg>
+                  </button>
+                </div>
+                <div id="termList" class="term-list"></div>
+              </div>
+
+              <form id="termForm" class="panel-block editor-form">
+                <div class="section-heading compact-heading">
+                  <div>
+                    <p class="eyebrow">Term</p>
+                    <h2>選択用語</h2>
+                  </div>
+                </div>
+                <label>
+                  <span>用語名</span>
+                  <input id="termName" class="control" type="text" autocomplete="off" />
+                </label>
+                <div id="termSceneMatches" class="term-scene-matches"></div>
+                <div class="picker-header">
+                  <span>別名</span>
+                  <div class="term-actions">
+                    <button class="icon-button compact" id="addTermAliasButton" type="button" aria-label="別名追加" title="別名追加">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 5v14M5 12h14" />
+                      </svg>
+                    </button>
+                    <button class="text-button" id="searchTermScenesButton" type="button">シーン検索</button>
+                  </div>
+                </div>
+                <div id="termAliasList" class="alias-input-list"></div>
+                <label>
+                  <span>詳細</span>
+                  <textarea id="termDetails" class="control manuscript"></textarea>
+                </label>
+                <div class="form-actions delete-actions">
+                  <label class="delete-confirm">
+                    <input id="deleteTermConfirm" type="checkbox" />
+                    <span>削除を有効にする</span>
+                  </label>
+                  <button class="text-button danger" id="deleteTermButton" type="button">削除</button>
+                </div>
+              </form>
+            </div>
+          </section>
+
+          <section class="tab-panel" id="settingsPanel" aria-labelledby="settings">
+            <div class="settings-layout">
+              <div class="panel-block">
+                <div class="section-heading compact-heading">
+                  <div>
+                    <p class="eyebrow">Profile</p>
+                    <h2>プロフィール項目</h2>
+                  </div>
+                  <button class="icon-button compact" id="addProfileFieldButton" type="button" aria-label="プロフィール項目追加" title="プロフィール項目追加">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M12 5v14M5 12h14" />
+                    </svg>
+                  </button>
+                </div>
+                <div id="profileFieldSettingsList" class="settings-list"></div>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <aside class="inspector" aria-label="選択キャラクター">
+          <form id="characterForm" class="panel-block character-form">
+            <div class="section-heading compact-heading">
+              <div>
+                <p class="eyebrow">Profile</p>
+                <h2>選択キャラ</h2>
+              </div>
+            </div>
+            <div id="characterNameField" class="profile-field">
+              <div class="profile-label-row">
+                <label for="characterName">名前</label>
+                <button class="mini-button" id="aliasToggleButton" type="button" aria-expanded="false">あだ名</button>
+              </div>
+              <input id="characterName" class="control" type="text" autocomplete="off" required />
+            </div>
+            <div id="aliasAccordion" class="alias-accordion" hidden>
+              <div class="profile-label-row">
+                <span>あだ名・別名</span>
+                <button class="icon-button compact" id="addAliasButton" type="button" aria-label="あだ名追加" title="あだ名追加">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                </button>
+              </div>
+              <div id="aliasInputList" class="alias-input-list"></div>
+            </div>
+            <label id="characterFirstPersonField">
+              <span>一人称</span>
+              <input id="characterFirstPerson" class="control" type="text" autocomplete="off" />
+            </label>
+            <label id="characterColorField">
+              <span>色</span>
+              <input id="characterColor" class="control color-input" type="color" />
+            </label>
+            <label id="characterNotesField">
+              <span>備考</span>
+              <textarea id="characterNotes" class="control short-text"></textarea>
+            </label>
+            <div id="customProfileFields" class="custom-profile-fields"></div>
+            <div class="form-actions delete-actions">
+              <label class="delete-confirm">
+                <input id="deleteCharacterConfirm" type="checkbox" />
+                <span>削除を有効にする</span>
+              </label>
+              <button class="text-button danger" id="deleteCharacterButton" type="button">削除</button>
+            </div>
+          </form>
+
+          <div class="panel-block">
+            <div class="section-heading compact-heading">
+              <div>
+                <p class="eyebrow">Mentions</p>
+                <h2>登場シーン</h2>
+              </div>
+            </div>
+            <div id="selectedCharacterHistory" class="mini-history"></div>
+          </div>
+        </aside>
+      </main>
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <script src="./text-tools.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
