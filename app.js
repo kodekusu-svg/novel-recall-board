@@ -1,5 +1,5 @@
 const STORAGE_KEY = "novel-recall-board:v1";
-const APP_VERSION = "0.3.1";
+const APP_VERSION = "0.3.2";
 const RULES_VERSION = "2026-05-13-feedback-a";
 const DEFAULT_FEEDBACK_ENDPOINT =
   "https://script.google.com/macros/s/AKfycbwuu-lJ7XrmGKGV6_qzhm6cgd_V3zt7FFWLTByuNCqANdOrDjuYQTTkpX0pAt0JAYPR/exec";
@@ -552,9 +552,7 @@ function bindEvents() {
   els.profileFieldSettingsList.addEventListener("input", (event) => {
     const builtIn = event.target.closest("[data-built-in-profile]");
     if (builtIn) {
-      state.profileSettings.builtIns[builtIn.dataset.builtInProfile] = builtIn.checked;
-      persistSoon();
-      renderCharacterForm();
+      applyBuiltInProfileSetting(builtIn);
       return;
     }
 
@@ -565,6 +563,11 @@ function bindEvents() {
     field.label = customLabel.value.trimStart();
     persistSoon();
     renderCharacterForm();
+  });
+
+  els.profileFieldSettingsList.addEventListener("change", (event) => {
+    const builtIn = event.target.closest("[data-built-in-profile]");
+    if (builtIn) applyBuiltInProfileSetting(builtIn);
   });
 
   els.profileFieldSettingsList.addEventListener("click", (event) => {
@@ -1071,6 +1074,18 @@ function renderProfileSettings() {
       ${customFields}
     </div>
   `;
+}
+
+function applyBuiltInProfileSetting(input) {
+  const key = input?.dataset?.builtInProfile;
+  if (!key || key === "name") return;
+  state.profileSettings.builtIns ||= {};
+  const checked = input.checked;
+  if (state.profileSettings.builtIns[key] === checked) return;
+  state.profileSettings.builtIns[key] = checked;
+  if (key === "aliases" && !checked) aliasesExpanded = false;
+  persistNow();
+  renderCharacterForm();
 }
 
 function renderCharacters() {
