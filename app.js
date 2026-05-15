@@ -1,5 +1,5 @@
 const STORAGE_KEY = "novel-recall-board:v1";
-const APP_VERSION = "0.3.0";
+const APP_VERSION = "0.3.1";
 const RULES_VERSION = "2026-05-13-feedback-a";
 const DEFAULT_FEEDBACK_ENDPOINT =
   "https://script.google.com/macros/s/AKfycbwuu-lJ7XrmGKGV6_qzhm6cgd_V3zt7FFWLTByuNCqANdOrDjuYQTTkpX0pAt0JAYPR/exec";
@@ -101,10 +101,11 @@ const candidateStopwords = new Set([
 const sampleState = {
   projectName: "無題の作品",
   sourceText: "",
+  sourceSceneId: "",
   nameExtractionMode: "strict",
   ignoredNames: [],
   profileSettings: {
-    builtIns: { name: true, aliases: true, firstPerson: true, color: true, notes: true },
+    builtIns: { name: true, aliases: true, firstPerson: true, retired: true, color: true, notes: true },
     customFields: [],
   },
   characters: [],
@@ -146,6 +147,8 @@ const els = {
   addAliasButton: document.querySelector("#addAliasButton"),
   characterFirstPersonField: document.querySelector("#characterFirstPersonField"),
   characterFirstPerson: document.querySelector("#characterFirstPerson"),
+  characterRetiredField: document.querySelector("#characterRetiredField"),
+  characterRetired: document.querySelector("#characterRetired"),
   characterColorField: document.querySelector("#characterColorField"),
   characterColor: document.querySelector("#characterColor"),
   characterNotesField: document.querySelector("#characterNotesField"),
@@ -161,6 +164,8 @@ const els = {
   lastSeenGrid: document.querySelector("#lastSeenGrid"),
   sourceText: document.querySelector("#sourceText"),
   sourceSceneSelect: document.querySelector("#sourceSceneSelect"),
+  sourcePrevSceneButton: document.querySelector("#sourcePrevSceneButton"),
+  sourceNextSceneButton: document.querySelector("#sourceNextSceneButton"),
   sourceCountWithWhitespace: document.querySelector("#sourceCountWithWhitespace"),
   sourceCountWithoutWhitespace: document.querySelector("#sourceCountWithoutWhitespace"),
   nameExtractionMode: document.querySelector("#nameExtractionMode"),
@@ -324,6 +329,7 @@ function normalizeProfileSettings(settings) {
       name: true,
       aliases: builtIns.aliases !== false,
       firstPerson: builtIns.firstPerson !== false,
+      retired: builtIns.retired !== false,
       color: builtIns.color !== false,
       notes: builtIns.notes !== false,
     },
@@ -344,6 +350,7 @@ function normalizeCharacter(character) {
     name: typeof character.name === "string" && character.name.trim() ? character.name : "無題のキャラ",
     aliases: Array.isArray(character.aliases) ? character.aliases.filter((alias) => typeof alias === "string") : [],
     firstPerson: typeof character.firstPerson === "string" ? character.firstPerson : "",
+    retired: character.retired === true,
     color: typeof character.color === "string" && character.color ? character.color : "#2f7d68",
     notes: typeof character.notes === "string" ? character.notes : "",
     profileValues,
@@ -461,6 +468,10 @@ function bindEvents() {
     });
   });
 
+  els.characterRetired.addEventListener("change", () => {
+    updateSelectedCharacterFromForm();
+  });
+
   els.characterForm.addEventListener("input", (event) => {
     if (!event.target.matches("[data-alias-index], [data-custom-profile-id]")) return;
     updateSelectedCharacterFromForm();
@@ -575,23 +586,21 @@ function bindEvents() {
     state.sourceText = els.sourceText.value;
     state.sourceSceneId = "";
     els.sourceSceneSelect.value = "";
+    updateSourceSceneNavigation("");
     renderSourceCounts();
     persistSoon();
   });
 
   els.sourceSceneSelect.addEventListener("change", () => {
-    const scene = findScene(els.sourceSceneSelect.value);
-    state.sourceSceneId = scene?.id || "";
-    if (scene) {
-      state.sourceText = scene.text || "";
-      sourceNameCandidates = [];
-      sourceAppellationCandidates = [];
-      els.sourceText.value = state.sourceText;
-      renderSourceCounts();
-      renderSourceNameCandidates();
-      renderSourceAppellationCandidates();
-    }
-    persistNow();
+    loadSourceScene(els.sourceSceneSelect.value);
+  });
+
+  els.sourcePrevSceneButton.addEventListener("click", () => {
+    moveSourceScene(-1);
+  });
+
+  els.sourceNextSceneButton.addEventListener("click", () => {
+    moveSourceScene(1);
   });
 
   els.nameExtractionMode.addEventListener("change", () => {
@@ -1023,6 +1032,7 @@ function renderProfileSettings() {
     name: "名前",
     aliases: "あだ名",
     firstPerson: "一人称",
+    retired: "退場",
     color: "色",
     notes: "備考",
   };
@@ -1073,10 +1083,12 @@ function renderCharacters() {
     .map((character) => {
       const count = scenesForCharacter(character.id).length;
       const active = character.id === state.selectedCharacterId ? " active" : "";
+      const retired = character.retired ? " retired" : "";
+      const status = character.retired ? "退場 / " : "";
       return `
-        <button class="character-card${active}" type="button" draggable="true" data-character-id="${escapeAttr(character.id)}">
+        <button class="character-card${active}${retired}" type="button" draggable="true" data-character-id="${escapeAttr(character.id)}">
           <strong><span class="color-dot" style="background:${escapeAttr(character.color)}"></span>${escapeHtml(character.name)}</strong>
-          <span class="character-meta">${count}シーン / ${escapeHtml(character.aliases.join("、") || "別名なし")}</span>
+          <span class="character-meta">${status}${count}シーン / ${escapeHtml(character.aliases.join("、") || "別名なし")}</span>
         </button>
       `;
     })
@@ -1175,7 +1187,16 @@ function moveCharacter(dragId, targetId, position) {
 function renderCharacterForm() {
   const character = selectedCharacter();
   const disabled = !character;
-  [els.characterName, els.aliasToggleButton, els.addAliasButton, els.characterFirstPerson, els.characterColor, els.characterNotes, els.deleteCharacterConfirm].forEach((control) => {
+  [
+    els.characterName,
+    els.aliasToggleButton,
+    els.addAliasButton,
+    els.characterFirstPerson,
+    els.characterRetired,
+    els.characterColor,
+    els.characterNotes,
+    els.deleteCharacterConfirm,
+  ].forEach((control) => {
     control.disabled = disabled;
   });
   els.deleteCharacterConfirm.checked = false;
@@ -1184,12 +1205,14 @@ function renderCharacterForm() {
   els.characterNameField.hidden = !profileFieldVisible("name");
   els.aliasToggleButton.hidden = !profileFieldVisible("aliases");
   els.characterFirstPersonField.hidden = !profileFieldVisible("firstPerson");
+  els.characterRetiredField.hidden = !profileFieldVisible("retired");
   els.characterColorField.hidden = !profileFieldVisible("color");
   els.characterNotesField.hidden = !profileFieldVisible("notes");
 
   if (!character) {
     els.characterName.value = "";
     els.characterFirstPerson.value = "";
+    els.characterRetired.checked = false;
     els.characterColor.value = "#2f7d68";
     els.characterNotes.value = "";
     els.aliasAccordion.hidden = true;
@@ -1201,6 +1224,7 @@ function renderCharacterForm() {
 
   els.characterName.value = character.name;
   els.characterFirstPerson.value = character.firstPerson || "";
+  els.characterRetired.checked = character.retired === true;
   els.characterColor.value = character.color || "#2f7d68";
   els.characterNotes.value = character.notes || "";
   renderAliasAccordion(character);
@@ -1275,6 +1299,7 @@ function updateSelectedCharacterFromForm() {
       .filter(Boolean);
   }
   character.firstPerson = els.characterFirstPerson.value.trim();
+  character.retired = els.characterRetired.checked;
   character.color = els.characterColor.value || character.color;
   character.notes = els.characterNotes.value.trim();
   character.profileValues ||= {};
@@ -1356,8 +1381,41 @@ function renderSourceSceneOptions() {
     `<option value="">シーンを選択</option>`,
     ...state.scenes.map((scene) => `<option value="${escapeAttr(scene.id)}">${escapeHtml(sceneLabel(scene))}</option>`),
   ].join("");
-  els.sourceSceneSelect.value = findScene(current) ? current : "";
+  const selectedSceneId = findScene(current) ? current : "";
+  els.sourceSceneSelect.value = selectedSceneId;
   els.sourceSceneSelect.disabled = !state.scenes.length;
+  updateSourceSceneNavigation(selectedSceneId);
+}
+
+function updateSourceSceneNavigation(selectedSceneId = state.sourceSceneId || "") {
+  const hasScenes = state.scenes.length > 0;
+  const index = state.scenes.findIndex((scene) => scene.id === selectedSceneId);
+  els.sourcePrevSceneButton.disabled = !hasScenes || index === 0;
+  els.sourceNextSceneButton.disabled = !hasScenes || index === state.scenes.length - 1;
+}
+
+function loadSourceScene(sceneId) {
+  const scene = findScene(sceneId);
+  state.sourceSceneId = scene?.id || "";
+  if (scene) {
+    state.sourceText = scene.text || "";
+    sourceNameCandidates = [];
+    sourceAppellationCandidates = [];
+    els.sourceText.value = state.sourceText;
+    renderSourceCounts();
+    renderSourceNameCandidates();
+    renderSourceAppellationCandidates();
+  }
+  renderSourceSceneOptions();
+  persistNow();
+}
+
+function moveSourceScene(offset) {
+  if (!state.scenes.length) return;
+  const currentIndex = state.scenes.findIndex((scene) => scene.id === state.sourceSceneId);
+  const startIndex = offset > 0 ? -1 : state.scenes.length;
+  const nextIndex = Math.max(0, Math.min(state.scenes.length - 1, (currentIndex >= 0 ? currentIndex : startIndex) + offset));
+  loadSourceScene(state.scenes[nextIndex]?.id || "");
 }
 
 function renderSourceNameCandidates() {
@@ -2099,6 +2157,7 @@ function createCharacter(name) {
     name,
     aliases: [],
     firstPerson: "",
+    retired: false,
     color: palette[state.characters.length % palette.length],
     notes: "",
     profileValues: {},
@@ -2157,6 +2216,7 @@ function extractCharacterCandidates(text, mode = "strict") {
 
   collectMatches(text, /[一-龯々〆ヵヶ]{1,5}[・＝=\s　]?[ァ-ヶーA-Za-zＡ-Ｚａ-ｚ]{2,10}/g, "姓名", add);
   collectMatches(text, /[ァ-ヶーA-Za-zＡ-Ｚａ-ｚ]{2,12}・[ァ-ヶーA-Za-zＡ-Ｚａ-ｚ]{2,12}/g, "姓名", add);
+  collectSpacedFullNameMatches(text, add);
   collectFullNameMatches(text, add);
   collectMatches(text, new RegExp(`(${kanjiNamePattern})[ぁ-んー]{2,8}(?=だって|は|が|を|に|へ|と|も|で|から|、|。|」|』)`, "g"), "ルビ名", add, 1);
   collectMatches(text, new RegExp(`(${kanjiNamePattern})(?=は|が|を|に|へ|と|も|から|で|、|。|」|』)`, "g"), "漢字名", add, 1);
@@ -2182,7 +2242,7 @@ function extractCharacterCandidates(text, mode = "strict") {
     }))
     .filter((candidate) => candidate.score >= threshold)
     .filter((candidate) => mode === "wide" || !isWeakSingleReasonCandidate(candidate))
-    .sort((a, b) => b.score - a.score || b.count - a.count || a.firstIndex - b.firstIndex);
+    .sort(compareNameCandidates);
 
   return candidates
     .filter((candidate) => {
@@ -2191,11 +2251,16 @@ function extractCharacterCandidates(text, mode = "strict") {
         return other.name !== candidate.name && other.name.includes(candidate.name) && other.count >= candidate.count;
       });
     })
+    .sort(compareNameCandidates)
     .slice(0, 30);
 }
 
 function hasStrongNameContext(candidate) {
   return candidate.reasons.some((reason) => ["フルネーム", "敬称", "愛称", "会話呼称", "文脈名"].includes(reason));
+}
+
+function compareNameCandidates(a, b) {
+  return [...b.name].length - [...a.name].length || b.count - a.count || b.score - a.score || a.firstIndex - b.firstIndex;
 }
 
 function extractionThreshold(mode) {
@@ -2251,8 +2316,29 @@ function collectFullNameMatches(text, add) {
   });
 }
 
+function collectSpacedFullNameMatches(text, add) {
+  const family = "[一-龯々〆ヵヶ]{1,5}";
+  const given = "(?:[一-龯々〆ヵヶ]{1,4}|[ぁ-んー]{1,6}|[ァ-ヶーA-Za-zＡ-Ｚａ-ｚ]{2,12})";
+  const before = "(^|[「『（(【\\[、。！？!?\\n\\r\\s　])";
+  const boundary = "(?=です|でした|と申|って|は|が|を|に|へ|と|も|で|から|、|。|！|？|」|』|\\)|）|\\]|】|\\n|\\r|$)";
+  const pattern = new RegExp(`${before}(${family})[\\s　]+(${given})${boundary}`, "g");
+
+  for (const match of text.matchAll(pattern)) {
+    const familyName = match[2] || "";
+    const givenName = match[3] || "";
+    if (isBadFamilyName(familyName) || isBadSpacedFullNamePart(familyName) || isBadSpacedFullNamePart(givenName)) continue;
+    add(`${familyName}${givenName}`, "フルネーム", match.index || 0);
+  }
+}
+
 function isBadFamilyName(value) {
   return /^(一旦|一応|剛|貫|小|大|中|高)$/.test(value);
+}
+
+function isBadSpacedFullNamePart(value) {
+  if (!value) return true;
+  if (candidateStopwords.has(value)) return true;
+  return /^(第|章|話|場合|今日|明日|昨日|今回|次回|現在|以前|以上|以下|全部|全員|普通|特別|委員|生徒|先生|先輩|後輩)$/.test(value);
 }
 
 function collectVocativeSegments(text, add) {

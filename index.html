@@ -145,10 +145,16 @@
                     <h2>解析用本文</h2>
                   </div>
                 </div>
-                <label>
-                  <span>登録済みシーンから本文を取り込む</span>
-                  <select id="sourceSceneSelect" class="control"></select>
-                </label>
+                <div class="source-scene-picker">
+                  <label>
+                    <span>登録済みシーンから本文を取り込む</span>
+                    <select id="sourceSceneSelect" class="control"></select>
+                  </label>
+                  <div class="scene-nav-actions" aria-label="読み込み対象シーンの移動">
+                    <button class="text-button" id="sourcePrevSceneButton" type="button">前の話</button>
+                    <button class="text-button" id="sourceNextSceneButton" type="button">次の話</button>
+                  </div>
+                </div>
                 <label class="source-text-label">
                   <span>本文</span>
                   <textarea id="sourceText" class="control source-text" spellcheck="false"></textarea>
@@ -490,6 +496,10 @@
             <label id="characterFirstPersonField">
               <span>一人称</span>
               <input id="characterFirstPerson" class="control" type="text" autocomplete="off" />
+            </label>
+            <label id="characterRetiredField" class="checkbox-field">
+              <input id="characterRetired" type="checkbox" />
+              <span>退場</span>
             </label>
             <label id="characterColorField">
               <span>色</span>
