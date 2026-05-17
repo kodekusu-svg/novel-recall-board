@@ -116,6 +116,7 @@
             <button class="tab" type="button" data-tab="source">キャラ検出</button>
             <button class="tab" type="button" data-tab="appellations">呼称表</button>
             <button class="tab" type="button" data-tab="overview">最終登場</button>
+            <button class="tab" type="button" data-tab="chronology">時系列</button>
             <button class="tab" type="button" data-tab="timeline">検索</button>
             <button class="tab" type="button" data-tab="terms">用語</button>
             <button class="tab" type="button" data-tab="settings">設定</button>
@@ -391,6 +392,43 @@
             <div id="timelineList" class="timeline-list"></div>
           </section>
 
+          <section class="tab-panel" id="chronologyPanel" aria-labelledby="chronology">
+            <div class="chronology-layout">
+              <div class="panel-block chronology-board">
+                <div class="section-heading compact-heading">
+                  <div>
+                    <p class="eyebrow">Chronology</p>
+                    <h2>時系列</h2>
+                  </div>
+                  <button class="text-button" id="addChronologyEntryButton" type="button">物語を追加</button>
+                </div>
+                <div id="chronologyList" class="chronology-list"></div>
+              </div>
+
+              <form id="chronologyForm" class="panel-block editor-form chronology-form">
+                <div class="section-heading compact-heading">
+                  <div>
+                    <p class="eyebrow">Detail</p>
+                    <h2>時系列詳細</h2>
+                  </div>
+                </div>
+                <label>
+                  <span>時期</span>
+                  <input id="chronologyPeriod" class="control" type="text" autocomplete="off" placeholder="例: 春、入学式の翌日、三日後" />
+                </label>
+                <label>
+                  <span>該当シーン</span>
+                  <select id="chronologySceneSelect" class="control"></select>
+                </label>
+                <label>
+                  <span>メモ</span>
+                  <textarea id="chronologyNote" class="control short-text"></textarea>
+                </label>
+                <div id="chronologyCustomFields" class="custom-profile-fields"></div>
+              </form>
+            </div>
+          </section>
+
           <section class="tab-panel" id="termsPanel" aria-labelledby="terms">
             <div class="split-view">
               <div class="panel-block scene-list-block">
@@ -462,6 +500,20 @@
                   </button>
                 </div>
                 <div id="profileFieldSettingsList" class="settings-list"></div>
+              </div>
+              <div class="panel-block">
+                <div class="section-heading compact-heading">
+                  <div>
+                    <p class="eyebrow">Chronology</p>
+                    <h2>時系列詳細項目</h2>
+                  </div>
+                  <button class="icon-button compact" id="addChronologyFieldButton" type="button" aria-label="時系列詳細項目追加" title="時系列詳細項目追加">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M12 5v14M5 12h14" />
+                    </svg>
+                  </button>
+                </div>
+                <div id="chronologyFieldSettingsList" class="settings-list"></div>
               </div>
             </div>
           </section>

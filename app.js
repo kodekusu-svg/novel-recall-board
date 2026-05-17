@@ -1,5 +1,5 @@
 const STORAGE_KEY = "novel-recall-board:v1";
-const APP_VERSION = "0.3.2";
+const APP_VERSION = "0.4.0";
 const RULES_VERSION = "2026-05-13-feedback-a";
 const DEFAULT_FEEDBACK_ENDPOINT =
   "https://script.google.com/macros/s/AKfycbwuu-lJ7XrmGKGV6_qzhm6cgd_V3zt7FFWLTByuNCqANdOrDjuYQTTkpX0pAt0JAYPR/exec";
@@ -7,7 +7,7 @@ const LEGACY_SAMPLE_PROJECT_NAME = "呼称と登場履歴トラッカー";
 const LEGACY_SAMPLE_CHARACTER_IDS = new Set(["char_aoi", "char_mika", "char_hayate"]);
 const LEGACY_SAMPLE_SCENE_IDS = new Set(["scene_01", "scene_02"]);
 const MATRIX_NAME_MAX_CHARS = 8;
-const TAB_ORDER = ["scenes", "source", "appellations", "overview", "timeline", "terms", "settings"];
+const TAB_ORDER = ["scenes", "source", "appellations", "overview", "chronology", "timeline", "terms", "settings"];
 const MOBILE_MEDIA_QUERY = "(max-width: 860px)";
 
 const palette = ["#2f7d68", "#3068a8", "#c14d64", "#8a681a", "#5f5aa2", "#2f6f8f"];
@@ -110,12 +110,17 @@ const sampleState = {
   },
   characters: [],
   scenes: [],
+  chronologyEntries: [],
+  chronologySettings: {
+    customFields: [],
+  },
   terms: [],
   appellations: {},
   appellationHiddenCharacterIds: [],
   appellationSelectedCharacterId: "",
   selectedCharacterId: null,
   selectedSceneId: null,
+  selectedChronologyEntryId: null,
   selectedTermId: null,
   activeTab: "scenes",
   feedbackClientId: "",
@@ -220,6 +225,13 @@ const els = {
   timelinePartner: document.querySelector("#timelinePartner"),
   timelineQuery: document.querySelector("#timelineQuery"),
   timelineList: document.querySelector("#timelineList"),
+  addChronologyEntryButton: document.querySelector("#addChronologyEntryButton"),
+  chronologyList: document.querySelector("#chronologyList"),
+  chronologyForm: document.querySelector("#chronologyForm"),
+  chronologyPeriod: document.querySelector("#chronologyPeriod"),
+  chronologySceneSelect: document.querySelector("#chronologySceneSelect"),
+  chronologyNote: document.querySelector("#chronologyNote"),
+  chronologyCustomFields: document.querySelector("#chronologyCustomFields"),
   addTermButton: document.querySelector("#addTermButton"),
   termList: document.querySelector("#termList"),
   termForm: document.querySelector("#termForm"),
@@ -233,6 +245,8 @@ const els = {
   deleteTermButton: document.querySelector("#deleteTermButton"),
   profileFieldSettingsList: document.querySelector("#profileFieldSettingsList"),
   addProfileFieldButton: document.querySelector("#addProfileFieldButton"),
+  chronologyFieldSettingsList: document.querySelector("#chronologyFieldSettingsList"),
+  addChronologyFieldButton: document.querySelector("#addChronologyFieldButton"),
   supportButton: document.querySelector("#supportButton"),
   supportBanner: document.querySelector("#supportBanner"),
   exportButton: document.querySelector("#exportButton"),
@@ -269,6 +283,11 @@ function normalizeState(input) {
   ensureUniqueIds(base.characters, "char");
   base.scenes = Array.isArray(base.scenes) ? base.scenes.filter(isPlainObject).map((scene) => normalizeScene(scene, base)) : [];
   ensureUniqueIds(base.scenes, "scene");
+  base.chronologySettings = normalizeChronologySettings(base.chronologySettings);
+  base.chronologyEntries = Array.isArray(base.chronologyEntries)
+    ? base.chronologyEntries.filter(isPlainObject).map((entry) => normalizeChronologyEntry(entry, base))
+    : [];
+  ensureUniqueIds(base.chronologyEntries, "chrono");
   base.terms = Array.isArray(base.terms) ? base.terms.filter(isPlainObject).map((term) => normalizeTerm(term, base)) : [];
   ensureUniqueIds(base.terms, "term");
   base.appellations = normalizeAppellations(base.appellations, base);
@@ -289,6 +308,7 @@ function normalizeState(input) {
   }
   base.sourceSceneId = findScene(base.sourceSceneId, base)?.id || "";
   base.selectedSceneId = findScene(base.selectedSceneId, base)?.id || base.scenes[0]?.id || null;
+  base.selectedChronologyEntryId = findChronologyEntry(base.selectedChronologyEntryId, base)?.id || base.chronologyEntries[0]?.id || null;
   base.selectedTermId = findTerm(base.selectedTermId, base)?.id || base.terms[0]?.id || null;
   base.activeTab = TAB_ORDER.includes(base.activeTab) ? base.activeTab : "scenes";
   return base;
@@ -301,10 +321,13 @@ function removeLegacySampleState(base) {
   base.ignoredNames = [];
   base.characters = [];
   base.scenes = [];
+  base.chronologyEntries = [];
+  base.chronologySettings = { customFields: [] };
   base.terms = [];
   base.appellations = {};
   base.selectedCharacterId = null;
   base.selectedSceneId = null;
+  base.selectedChronologyEntryId = null;
   base.selectedTermId = null;
   base.activeTab = "scenes";
 }
@@ -369,6 +392,30 @@ function normalizeScene(scene, source = state) {
     characters: Array.isArray(scene.characters) ? scene.characters.filter((id) => characterIds.has(id)) : [],
     createdAt: typeof scene.createdAt === "string" ? scene.createdAt : new Date().toISOString(),
     updatedAt: typeof scene.updatedAt === "string" ? scene.updatedAt : new Date().toISOString(),
+  };
+}
+
+function normalizeChronologySettings(settings) {
+  const customFields = Array.isArray(settings?.customFields) ? settings.customFields : [];
+  return {
+    customFields: customFields
+      .filter((field) => field && typeof field === "object")
+      .map((field) => ({
+        id: field.id || createId("chrono_field"),
+        label: typeof field.label === "string" ? field.label : "",
+      })),
+  };
+}
+
+function normalizeChronologyEntry(entry, source = state) {
+  return {
+    ...entry,
+    id: typeof entry.id === "string" && entry.id ? entry.id : createId("chrono"),
+    sceneId: findScene(entry.sceneId, source)?.id || "",
+    period: typeof entry.period === "string" ? entry.period : "",
+    note: typeof entry.note === "string" ? entry.note : "",
+    gap: Number.isFinite(entry.gap) ? Math.max(1, Math.min(8, Math.round(entry.gap))) : 2,
+    customValues: isPlainObject(entry.customValues) ? entry.customValues : {},
   };
 }
 
@@ -581,6 +628,41 @@ function bindEvents() {
     persistNow();
     renderProfileSettings();
     renderCharacterForm();
+  });
+
+  els.addChronologyFieldButton.addEventListener("click", () => {
+    state.chronologySettings.customFields.push({
+      id: createId("chrono_field"),
+      label: "",
+    });
+    persistNow();
+    renderChronologySettings();
+    renderChronologyForm();
+    const inputs = els.chronologyFieldSettingsList.querySelectorAll("[data-chronology-field-label]");
+    inputs[inputs.length - 1]?.focus();
+  });
+
+  els.chronologyFieldSettingsList.addEventListener("input", (event) => {
+    const customLabel = event.target.closest("[data-chronology-field-label]");
+    if (!customLabel) return;
+    const field = state.chronologySettings.customFields.find((item) => item.id === customLabel.dataset.chronologyFieldLabel);
+    if (!field) return;
+    field.label = customLabel.value.trimStart();
+    persistSoon();
+    renderChronologyForm();
+  });
+
+  els.chronologyFieldSettingsList.addEventListener("click", (event) => {
+    const deleteButton = event.target.closest("[data-delete-chronology-field]");
+    if (!deleteButton) return;
+    const id = deleteButton.dataset.deleteChronologyField;
+    state.chronologySettings.customFields = state.chronologySettings.customFields.filter((field) => field.id !== id);
+    state.chronologyEntries.forEach((entry) => {
+      if (entry.customValues) delete entry.customValues[id];
+    });
+    persistNow();
+    renderChronologySettings();
+    renderChronologyForm();
   });
 
   els.overviewSort.addEventListener("change", renderOverview);
@@ -813,6 +895,9 @@ function bindEvents() {
     state.terms.forEach((term) => {
       term.sceneMatches = (term.sceneMatches || []).filter((match) => match.sceneId !== scene.id);
     });
+    state.chronologyEntries.forEach((entry) => {
+      if (entry.sceneId === scene.id) entry.sceneId = "";
+    });
     state.selectedSceneId = state.scenes[0]?.id || null;
     persistNow();
     render();
@@ -895,6 +980,45 @@ function bindEvents() {
   [els.timelineCharacter, els.timelinePartner, els.timelineQuery].forEach((control) => {
     control.addEventListener("input", renderTimeline);
     control.addEventListener("change", renderTimeline);
+  });
+
+  els.addChronologyEntryButton.addEventListener("click", () => {
+    addChronologyEntry(state.chronologyEntries.length);
+  });
+
+  els.chronologyList.addEventListener("click", (event) => {
+    const entryButton = event.target.closest("[data-chronology-entry-id]");
+    if (entryButton) {
+      selectChronologyEntry(entryButton.dataset.chronologyEntryId);
+      return;
+    }
+
+    const addGapButton = event.target.closest("[data-chronology-add-gap]");
+    if (addGapButton) {
+      extendChronologyGap(addGapButton.dataset.chronologyAddGap);
+      return;
+    }
+
+    const insertButton = event.target.closest("[data-chronology-insert-after]");
+    if (insertButton) {
+      const index = state.chronologyEntries.findIndex((entry) => entry.id === insertButton.dataset.chronologyInsertAfter);
+      addChronologyEntry(index + 1);
+    }
+  });
+
+  els.chronologyForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+  });
+
+  [els.chronologyPeriod, els.chronologyNote].forEach((control) => {
+    control.addEventListener("input", updateSelectedChronologyEntryFromForm);
+  });
+
+  els.chronologySceneSelect.addEventListener("change", updateSelectedChronologyEntryFromForm);
+
+  els.chronologyCustomFields.addEventListener("input", (event) => {
+    if (!event.target.matches("[data-chronology-custom-id]")) return;
+    updateSelectedChronologyEntryFromForm();
   });
 
   els.addTermButton.addEventListener("click", () => {
@@ -992,6 +1116,7 @@ function render() {
   renderSourceSceneOptions();
   renderTabs();
   renderProfileSettings();
+  renderChronologySettings();
   renderCharacters();
   renderCharacterForm();
   renderSourceNameCandidates();
@@ -1003,6 +1128,8 @@ function render() {
   renderAppellations();
   renderTimelineControls();
   renderTimeline();
+  renderChronology();
+  renderChronologyForm();
   renderTerms();
   renderOverview();
   updateMobileAccordions();
@@ -1086,6 +1213,29 @@ function applyBuiltInProfileSetting(input) {
   if (key === "aliases" && !checked) aliasesExpanded = false;
   persistNow();
   renderCharacterForm();
+}
+
+function renderChronologySettings() {
+  const customFields = state.chronologySettings.customFields.length
+    ? state.chronologySettings.customFields
+        .map(
+          (field) => `
+            <div class="settings-row custom-setting-row">
+              <input class="control" data-chronology-field-label="${escapeAttr(field.id)}" type="text" value="${escapeAttr(field.label)}" placeholder="項目名" />
+              <button class="mini-button danger" type="button" data-delete-chronology-field="${escapeAttr(field.id)}">削除</button>
+            </div>
+          `,
+        )
+        .join("")
+    : `<div class="empty-state">追加項目なし</div>`;
+
+  els.chronologyFieldSettingsList.innerHTML = `
+    <div class="settings-section">
+      <h3>詳細項目</h3>
+      <div class="settings-note">時期、該当シーン、メモは常に表示されます。</div>
+      ${customFields}
+    </div>
+  `;
 }
 
 function renderCharacters() {
@@ -1686,6 +1836,8 @@ function updateSelectedSceneFromForm(options = {}) {
   renderSceneOptions(els.appellationScene);
   renderTimelineControls();
   renderTimeline();
+  renderChronology();
+  renderChronologyForm();
   renderOverview();
   if (options.renderChecks) renderSceneCharacterChecks(scene);
 }
@@ -1887,6 +2039,132 @@ function renderTimeline() {
         })
         .join("")
     : `<div class="empty-state">該当シーンなし</div>`;
+}
+
+function renderChronology() {
+  if (!state.chronologyEntries.length) {
+    els.chronologyList.innerHTML = `
+      <div class="empty-state chronology-empty">
+        <button class="text-button" type="button" data-chronology-insert-after="">最初の物語を追加</button>
+      </div>
+    `;
+    return;
+  }
+
+  els.chronologyList.innerHTML = state.chronologyEntries
+    .map((entry, index) => {
+      const scene = findScene(entry.sceneId);
+      const active = entry.id === state.selectedChronologyEntryId ? " active" : "";
+      const gap = Math.max(1, Math.min(8, entry.gap || 2));
+      return `
+        <div class="chronology-entry${active}">
+          <div class="chronology-period">${escapeHtml(entry.period || "")}</div>
+          <button class="chronology-node" type="button" aria-label="${escapeAttr(scene ? `${sceneLabel(scene)}の詳細` : "時系列詳細")}" data-chronology-entry-id="${escapeAttr(entry.id)}"></button>
+          <button class="chronology-scene" type="button" data-chronology-entry-id="${escapeAttr(entry.id)}">
+            <strong>${escapeHtml(scene ? sceneLabel(scene) : `${index + 1}件目`)}</strong>
+            <span>${escapeHtml(entry.note || "メモなし")}</span>
+          </button>
+        </div>
+        <div class="chronology-segment" style="--chronology-gap:${gap}">
+          <div class="chronology-period" aria-hidden="true"></div>
+          <div class="chronology-line"></div>
+          <div class="chronology-segment-actions">
+            <button class="mini-button" type="button" data-chronology-add-gap="${escapeAttr(entry.id)}" title="長さを追加">+</button>
+            <button class="mini-button" type="button" data-chronology-insert-after="${escapeAttr(entry.id)}" title="この位置の物語を追加" aria-label="この位置の物語を追加">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M5 6h14v9H9l-4 4V6Z" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function renderChronologyForm() {
+  const entry = selectedChronologyEntry();
+  const disabled = !entry;
+  [els.chronologyPeriod, els.chronologySceneSelect, els.chronologyNote].forEach((control) => {
+    control.disabled = disabled;
+  });
+  renderChronologySceneOptions(entry?.sceneId || "");
+
+  if (!entry) {
+    els.chronologyPeriod.value = "";
+    els.chronologyNote.value = "";
+    els.chronologyCustomFields.innerHTML = `<div class="empty-state">時系列の○を選択してください</div>`;
+    return;
+  }
+
+  els.chronologyPeriod.value = entry.period || "";
+  els.chronologyNote.value = entry.note || "";
+  renderChronologyCustomFields(entry);
+}
+
+function renderChronologySceneOptions(currentSceneId = "") {
+  els.chronologySceneSelect.innerHTML = [
+    `<option value="">シーン未設定</option>`,
+    ...state.scenes.map((scene) => `<option value="${escapeAttr(scene.id)}">${escapeHtml(sceneLabel(scene))}</option>`),
+  ].join("");
+  els.chronologySceneSelect.value = findScene(currentSceneId) ? currentSceneId : "";
+}
+
+function renderChronologyCustomFields(entry) {
+  const fields = state.chronologySettings.customFields.filter((field) => field.label.trim());
+  els.chronologyCustomFields.innerHTML = fields.length
+    ? fields
+        .map(
+          (field) => `
+            <label>
+              <span>${escapeHtml(field.label)}</span>
+              <input class="control" data-chronology-custom-id="${escapeAttr(field.id)}" type="text" value="${escapeAttr(entry.customValues?.[field.id] || "")}" autocomplete="off" />
+            </label>
+          `,
+        )
+        .join("")
+    : "";
+}
+
+function addChronologyEntry(index = state.chronologyEntries.length) {
+  const entry = createChronologyEntry();
+  const insertIndex = Math.max(0, Math.min(state.chronologyEntries.length, Number.isFinite(index) ? index : state.chronologyEntries.length));
+  state.chronologyEntries.splice(insertIndex, 0, entry);
+  state.selectedChronologyEntryId = entry.id;
+  state.activeTab = "chronology";
+  persistNow();
+  render();
+  els.chronologyPeriod.focus();
+}
+
+function selectChronologyEntry(entryId) {
+  if (!findChronologyEntry(entryId)) return;
+  state.selectedChronologyEntryId = entryId;
+  persistNow();
+  renderChronology();
+  renderChronologyForm();
+}
+
+function extendChronologyGap(entryId) {
+  const entry = findChronologyEntry(entryId);
+  if (!entry) return;
+  entry.gap = Math.min(8, (entry.gap || 2) + 1);
+  persistNow();
+  renderChronology();
+}
+
+function updateSelectedChronologyEntryFromForm() {
+  const entry = selectedChronologyEntry();
+  if (!entry) return;
+  entry.period = els.chronologyPeriod.value.trim();
+  entry.sceneId = findScene(els.chronologySceneSelect.value)?.id || "";
+  entry.note = els.chronologyNote.value.trim();
+  entry.customValues ||= {};
+  els.chronologyCustomFields.querySelectorAll("[data-chronology-custom-id]").forEach((input) => {
+    entry.customValues[input.dataset.chronologyCustomId] = input.value.trim();
+  });
+  persistSoon();
+  renderChronology();
 }
 
 function renderTerms() {
@@ -2118,6 +2396,10 @@ function selectedTerm() {
   return findTerm(state.selectedTermId);
 }
 
+function selectedChronologyEntry() {
+  return findChronologyEntry(state.selectedChronologyEntryId);
+}
+
 function findCharacter(id, source = state) {
   return source.characters.find((character) => character.id === id) || null;
 }
@@ -2128,6 +2410,10 @@ function findScene(id, source = state) {
 
 function findTerm(id, source = state) {
   return source.terms.find((term) => term.id === id) || null;
+}
+
+function findChronologyEntry(id, source = state) {
+  return (source.chronologyEntries || []).find((entry) => entry.id === id) || null;
 }
 
 function scenesForCharacter(characterId) {
@@ -2186,6 +2472,17 @@ function createTerm(name) {
     aliases: [],
     details: "",
     sceneMatches: [],
+  };
+}
+
+function createChronologyEntry() {
+  return {
+    id: createId("chrono"),
+    sceneId: "",
+    period: "",
+    note: "",
+    gap: 2,
+    customValues: {},
   };
 }
 
