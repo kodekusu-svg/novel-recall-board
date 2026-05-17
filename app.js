@@ -1,5 +1,5 @@
 const STORAGE_KEY = "novel-recall-board:v1";
-const APP_VERSION = "0.4.0";
+const APP_VERSION = "0.4.1";
 const RULES_VERSION = "2026-05-13-feedback-a";
 const DEFAULT_FEEDBACK_ENDPOINT =
   "https://script.google.com/macros/s/AKfycbwuu-lJ7XrmGKGV6_qzhm6cgd_V3zt7FFWLTByuNCqANdOrDjuYQTTkpX0pAt0JAYPR/exec";
@@ -7,6 +7,7 @@ const LEGACY_SAMPLE_PROJECT_NAME = "呼称と登場履歴トラッカー";
 const LEGACY_SAMPLE_CHARACTER_IDS = new Set(["char_aoi", "char_mika", "char_hayate"]);
 const LEGACY_SAMPLE_SCENE_IDS = new Set(["scene_01", "scene_02"]);
 const MATRIX_NAME_MAX_CHARS = 8;
+const CHRONOLOGY_TRACK_COUNT = 3;
 const TAB_ORDER = ["scenes", "source", "appellations", "overview", "chronology", "timeline", "terms", "settings"];
 const MOBILE_MEDIA_QUERY = "(max-width: 860px)";
 
@@ -110,7 +111,7 @@ const sampleState = {
   },
   characters: [],
   scenes: [],
-  chronologyEntries: [],
+  chronologyTracks: createDefaultChronologyTracks(),
   chronologySettings: {
     customFields: [],
   },
@@ -120,6 +121,7 @@ const sampleState = {
   appellationSelectedCharacterId: "",
   selectedCharacterId: null,
   selectedSceneId: null,
+  selectedChronologyTrackId: "chrono_track_1",
   selectedChronologyEntryId: null,
   selectedTermId: null,
   activeTab: "scenes",
@@ -225,13 +227,18 @@ const els = {
   timelinePartner: document.querySelector("#timelinePartner"),
   timelineQuery: document.querySelector("#timelineQuery"),
   timelineList: document.querySelector("#timelineList"),
+  chronologyTrackButtons: document.querySelector("#chronologyTrackButtons"),
+  chronologyTrackNameFields: document.querySelector("#chronologyTrackNameFields"),
   addChronologyEntryButton: document.querySelector("#addChronologyEntryButton"),
   chronologyList: document.querySelector("#chronologyList"),
   chronologyForm: document.querySelector("#chronologyForm"),
   chronologyPeriod: document.querySelector("#chronologyPeriod"),
   chronologySceneSelect: document.querySelector("#chronologySceneSelect"),
+  chronologyCharacters: document.querySelector("#chronologyCharacters"),
   chronologyNote: document.querySelector("#chronologyNote"),
   chronologyCustomFields: document.querySelector("#chronologyCustomFields"),
+  deleteChronologyConfirm: document.querySelector("#deleteChronologyConfirm"),
+  deleteChronologyButton: document.querySelector("#deleteChronologyButton"),
   addTermButton: document.querySelector("#addTermButton"),
   termList: document.querySelector("#termList"),
   termForm: document.querySelector("#termForm"),
@@ -284,10 +291,8 @@ function normalizeState(input) {
   base.scenes = Array.isArray(base.scenes) ? base.scenes.filter(isPlainObject).map((scene) => normalizeScene(scene, base)) : [];
   ensureUniqueIds(base.scenes, "scene");
   base.chronologySettings = normalizeChronologySettings(base.chronologySettings);
-  base.chronologyEntries = Array.isArray(base.chronologyEntries)
-    ? base.chronologyEntries.filter(isPlainObject).map((entry) => normalizeChronologyEntry(entry, base))
-    : [];
-  ensureUniqueIds(base.chronologyEntries, "chrono");
+  base.chronologyTracks = normalizeChronologyTracks(base.chronologyTracks, base);
+  delete base.chronologyEntries;
   base.terms = Array.isArray(base.terms) ? base.terms.filter(isPlainObject).map((term) => normalizeTerm(term, base)) : [];
   ensureUniqueIds(base.terms, "term");
   base.appellations = normalizeAppellations(base.appellations, base);
@@ -308,7 +313,11 @@ function normalizeState(input) {
   }
   base.sourceSceneId = findScene(base.sourceSceneId, base)?.id || "";
   base.selectedSceneId = findScene(base.selectedSceneId, base)?.id || base.scenes[0]?.id || null;
-  base.selectedChronologyEntryId = findChronologyEntry(base.selectedChronologyEntryId, base)?.id || base.chronologyEntries[0]?.id || null;
+  base.selectedChronologyTrackId = findChronologyTrack(base.selectedChronologyTrackId, base)?.id || base.chronologyTracks[0]?.id || "chrono_track_1";
+  const selectedTrack = findChronologyTrack(base.selectedChronologyTrackId, base);
+  base.selectedChronologyEntryId = selectedTrack?.entries.some((entry) => entry.id === base.selectedChronologyEntryId)
+    ? base.selectedChronologyEntryId
+    : selectedTrack?.entries[0]?.id || null;
   base.selectedTermId = findTerm(base.selectedTermId, base)?.id || base.terms[0]?.id || null;
   base.activeTab = TAB_ORDER.includes(base.activeTab) ? base.activeTab : "scenes";
   return base;
@@ -321,12 +330,13 @@ function removeLegacySampleState(base) {
   base.ignoredNames = [];
   base.characters = [];
   base.scenes = [];
-  base.chronologyEntries = [];
+  base.chronologyTracks = createDefaultChronologyTracks();
   base.chronologySettings = { customFields: [] };
   base.terms = [];
   base.appellations = {};
   base.selectedCharacterId = null;
   base.selectedSceneId = null;
+  base.selectedChronologyTrackId = "chrono_track_1";
   base.selectedChronologyEntryId = null;
   base.selectedTermId = null;
   base.activeTab = "scenes";
@@ -405,6 +415,22 @@ function normalizeChronologySettings(settings) {
         label: typeof field.label === "string" ? field.label : "",
       })),
   };
+}
+
+function normalizeChronologyTracks(tracks, source = state) {
+  const legacyEntries = Array.isArray(source.chronologyEntries) ? source.chronologyEntries : [];
+  const inputTracks = Array.isArray(tracks) ? tracks : [];
+  return Array.from({ length: CHRONOLOGY_TRACK_COUNT }, (_, index) => {
+    const existing = isPlainObject(inputTracks[index]) ? inputTracks[index] : {};
+    const rawEntries = Array.isArray(existing.entries) ? existing.entries : index === 0 ? legacyEntries : [];
+    const normalizedEntries = rawEntries.filter(isPlainObject).map((entry) => normalizeChronologyEntry(entry, source));
+    ensureUniqueIds(normalizedEntries, "chrono");
+    return {
+      id: typeof existing.id === "string" && existing.id ? existing.id : `chrono_track_${index + 1}`,
+      name: typeof existing.name === "string" ? existing.name : `${index + 1}`,
+      entries: normalizedEntries,
+    };
+  });
 }
 
 function normalizeChronologyEntry(entry, source = state) {
@@ -657,7 +683,7 @@ function bindEvents() {
     if (!deleteButton) return;
     const id = deleteButton.dataset.deleteChronologyField;
     state.chronologySettings.customFields = state.chronologySettings.customFields.filter((field) => field.id !== id);
-    state.chronologyEntries.forEach((entry) => {
+    allChronologyEntries().forEach((entry) => {
       if (entry.customValues) delete entry.customValues[id];
     });
     persistNow();
@@ -895,7 +921,7 @@ function bindEvents() {
     state.terms.forEach((term) => {
       term.sceneMatches = (term.sceneMatches || []).filter((match) => match.sceneId !== scene.id);
     });
-    state.chronologyEntries.forEach((entry) => {
+    allChronologyEntries().forEach((entry) => {
       if (entry.sceneId === scene.id) entry.sceneId = "";
     });
     state.selectedSceneId = state.scenes[0]?.id || null;
@@ -983,7 +1009,22 @@ function bindEvents() {
   });
 
   els.addChronologyEntryButton.addEventListener("click", () => {
-    addChronologyEntry(state.chronologyEntries.length);
+    addChronologyEntry(currentChronologyEntries().length);
+  });
+
+  els.chronologyTrackButtons.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-chronology-track-id]");
+    if (!button) return;
+    selectChronologyTrack(button.dataset.chronologyTrackId);
+  });
+
+  els.chronologyTrackNameFields.addEventListener("input", (event) => {
+    const input = event.target.closest("[data-chronology-track-name]");
+    if (!input) return;
+    const track = findChronologyTrack(input.dataset.chronologyTrackName);
+    if (!track) return;
+    track.name = input.value.trimStart();
+    persistSoon();
   });
 
   els.chronologyList.addEventListener("click", (event) => {
@@ -999,9 +1040,15 @@ function bindEvents() {
       return;
     }
 
+    const removeGapButton = event.target.closest("[data-chronology-remove-gap]");
+    if (removeGapButton) {
+      shrinkChronologyGap(removeGapButton.dataset.chronologyRemoveGap);
+      return;
+    }
+
     const insertButton = event.target.closest("[data-chronology-insert-after]");
     if (insertButton) {
-      const index = state.chronologyEntries.findIndex((entry) => entry.id === insertButton.dataset.chronologyInsertAfter);
+      const index = currentChronologyEntries().findIndex((entry) => entry.id === insertButton.dataset.chronologyInsertAfter);
       addChronologyEntry(index + 1);
     }
   });
@@ -1020,6 +1067,12 @@ function bindEvents() {
     if (!event.target.matches("[data-chronology-custom-id]")) return;
     updateSelectedChronologyEntryFromForm();
   });
+
+  els.deleteChronologyButton.addEventListener("click", () => {
+    deleteSelectedChronologyEntry();
+  });
+
+  els.deleteChronologyConfirm.addEventListener("change", updateDeleteChronologyButtonState);
 
   els.addTermButton.addEventListener("click", () => {
     const term = createTerm(`新規用語${state.terms.length + 1}`);
@@ -1128,6 +1181,7 @@ function render() {
   renderAppellations();
   renderTimelineControls();
   renderTimeline();
+  renderChronologyTrackControls();
   renderChronology();
   renderChronologyForm();
   renderTerms();
@@ -2041,8 +2095,29 @@ function renderTimeline() {
     : `<div class="empty-state">該当シーンなし</div>`;
 }
 
+function renderChronologyTrackControls() {
+  els.chronologyTrackButtons.innerHTML = state.chronologyTracks
+    .map((track, index) => {
+      const active = track.id === state.selectedChronologyTrackId ? " active" : "";
+      return `<button class="mini-button chronology-track-button${active}" type="button" data-chronology-track-id="${escapeAttr(track.id)}">${index + 1}</button>`;
+    })
+    .join("");
+
+  els.chronologyTrackNameFields.innerHTML = state.chronologyTracks
+    .map(
+      (track, index) => `
+        <label>
+          <span>${index + 1}</span>
+          <input class="control" data-chronology-track-name="${escapeAttr(track.id)}" type="text" value="${escapeAttr(track.name || "")}" placeholder="時系列名" autocomplete="off" />
+        </label>
+      `,
+    )
+    .join("");
+}
+
 function renderChronology() {
-  if (!state.chronologyEntries.length) {
+  const entries = currentChronologyEntries();
+  if (!entries.length) {
     els.chronologyList.innerHTML = `
       <div class="empty-state chronology-empty">
         <button class="text-button" type="button" data-chronology-insert-after="">最初の物語を追加</button>
@@ -2051,7 +2126,7 @@ function renderChronology() {
     return;
   }
 
-  els.chronologyList.innerHTML = state.chronologyEntries
+  els.chronologyList.innerHTML = entries
     .map((entry, index) => {
       const scene = findScene(entry.sceneId);
       const active = entry.id === state.selectedChronologyEntryId ? " active" : "";
@@ -2069,6 +2144,7 @@ function renderChronology() {
           <div class="chronology-period" aria-hidden="true"></div>
           <div class="chronology-line"></div>
           <div class="chronology-segment-actions">
+            <button class="mini-button" type="button" data-chronology-remove-gap="${escapeAttr(entry.id)}" title="長さを減らす" ${gap <= 1 ? "disabled" : ""}>-</button>
             <button class="mini-button" type="button" data-chronology-add-gap="${escapeAttr(entry.id)}" title="長さを追加">+</button>
             <button class="mini-button" type="button" data-chronology-insert-after="${escapeAttr(entry.id)}" title="この位置の物語を追加" aria-label="この位置の物語を追加">
               <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -2085,20 +2161,24 @@ function renderChronology() {
 function renderChronologyForm() {
   const entry = selectedChronologyEntry();
   const disabled = !entry;
-  [els.chronologyPeriod, els.chronologySceneSelect, els.chronologyNote].forEach((control) => {
+  [els.chronologyPeriod, els.chronologySceneSelect, els.chronologyNote, els.deleteChronologyConfirm].forEach((control) => {
     control.disabled = disabled;
   });
+  els.deleteChronologyConfirm.checked = false;
+  updateDeleteChronologyButtonState();
   renderChronologySceneOptions(entry?.sceneId || "");
 
   if (!entry) {
     els.chronologyPeriod.value = "";
     els.chronologyNote.value = "";
+    els.chronologyCharacters.innerHTML = `<div class="empty-state">シーン未設定</div>`;
     els.chronologyCustomFields.innerHTML = `<div class="empty-state">時系列の○を選択してください</div>`;
     return;
   }
 
   els.chronologyPeriod.value = entry.period || "";
   els.chronologyNote.value = entry.note || "";
+  renderChronologyCharacters(entry);
   renderChronologyCustomFields(entry);
 }
 
@@ -2126,10 +2206,31 @@ function renderChronologyCustomFields(entry) {
     : "";
 }
 
-function addChronologyEntry(index = state.chronologyEntries.length) {
+function renderChronologyCharacters(entry) {
+  const scene = findScene(entry?.sceneId);
+  if (!scene) {
+    els.chronologyCharacters.innerHTML = `<div class="empty-state">シーン未設定</div>`;
+    return;
+  }
+  const characters = scene.characters.map((id) => findCharacter(id)).filter(Boolean);
+  els.chronologyCharacters.innerHTML = characters.length
+    ? characters
+        .map(
+          (character) => `
+            <span class="character-chip">
+              <span class="color-dot" style="background:${escapeAttr(character.color)}"></span>${escapeHtml(character.name)}
+            </span>
+          `,
+        )
+        .join("")
+    : `<div class="empty-state">登場キャラ未設定</div>`;
+}
+
+function addChronologyEntry(index = currentChronologyEntries().length) {
   const entry = createChronologyEntry();
-  const insertIndex = Math.max(0, Math.min(state.chronologyEntries.length, Number.isFinite(index) ? index : state.chronologyEntries.length));
-  state.chronologyEntries.splice(insertIndex, 0, entry);
+  const entries = currentChronologyEntries();
+  const insertIndex = Math.max(0, Math.min(entries.length, Number.isFinite(index) ? index : entries.length));
+  entries.splice(insertIndex, 0, entry);
   state.selectedChronologyEntryId = entry.id;
   state.activeTab = "chronology";
   persistNow();
@@ -2145,10 +2246,29 @@ function selectChronologyEntry(entryId) {
   renderChronologyForm();
 }
 
+function selectChronologyTrack(trackId) {
+  const track = findChronologyTrack(trackId);
+  if (!track) return;
+  state.selectedChronologyTrackId = track.id;
+  state.selectedChronologyEntryId = track.entries[0]?.id || null;
+  persistNow();
+  renderChronologyTrackControls();
+  renderChronology();
+  renderChronologyForm();
+}
+
 function extendChronologyGap(entryId) {
   const entry = findChronologyEntry(entryId);
   if (!entry) return;
   entry.gap = Math.min(8, (entry.gap || 2) + 1);
+  persistNow();
+  renderChronology();
+}
+
+function shrinkChronologyGap(entryId) {
+  const entry = findChronologyEntry(entryId);
+  if (!entry) return;
+  entry.gap = Math.max(1, (entry.gap || 2) - 1);
   persistNow();
   renderChronology();
 }
@@ -2165,6 +2285,24 @@ function updateSelectedChronologyEntryFromForm() {
   });
   persistSoon();
   renderChronology();
+  renderChronologyCharacters(entry);
+}
+
+function updateDeleteChronologyButtonState() {
+  els.deleteChronologyButton.disabled = !selectedChronologyEntry() || !els.deleteChronologyConfirm.checked;
+}
+
+function deleteSelectedChronologyEntry() {
+  const entry = selectedChronologyEntry();
+  if (!entry || !els.deleteChronologyConfirm.checked) return;
+  const entries = currentChronologyEntries();
+  const index = entries.findIndex((item) => item.id === entry.id);
+  if (index < 0) return;
+  entries.splice(index, 1);
+  state.selectedChronologyEntryId = entries[Math.min(index, entries.length - 1)]?.id || null;
+  persistNow();
+  renderChronology();
+  renderChronologyForm();
 }
 
 function renderTerms() {
@@ -2397,7 +2535,7 @@ function selectedTerm() {
 }
 
 function selectedChronologyEntry() {
-  return findChronologyEntry(state.selectedChronologyEntryId);
+  return currentChronologyEntries().find((entry) => entry.id === state.selectedChronologyEntryId) || null;
 }
 
 function findCharacter(id, source = state) {
@@ -2412,8 +2550,27 @@ function findTerm(id, source = state) {
   return source.terms.find((term) => term.id === id) || null;
 }
 
+function findChronologyTrack(id, source = state) {
+  return (source.chronologyTracks || []).find((track) => track.id === id) || null;
+}
+
 function findChronologyEntry(id, source = state) {
-  return (source.chronologyEntries || []).find((entry) => entry.id === id) || null;
+  return allChronologyEntries(source).find((entry) => entry.id === id) || null;
+}
+
+function currentChronologyTrack(source = state) {
+  return findChronologyTrack(source.selectedChronologyTrackId, source) || (source.chronologyTracks || [])[0] || null;
+}
+
+function currentChronologyEntries(source = state) {
+  const track = currentChronologyTrack(source);
+  if (!track) return [];
+  track.entries ||= [];
+  return track.entries;
+}
+
+function allChronologyEntries(source = state) {
+  return (source.chronologyTracks || []).flatMap((track) => track.entries || []);
 }
 
 function scenesForCharacter(characterId) {
@@ -2484,6 +2641,14 @@ function createChronologyEntry() {
     gap: 2,
     customValues: {},
   };
+}
+
+function createDefaultChronologyTracks() {
+  return Array.from({ length: CHRONOLOGY_TRACK_COUNT }, (_, index) => ({
+    id: `chrono_track_${index + 1}`,
+    name: `${index + 1}`,
+    entries: [],
+  }));
 }
 
 function addCharactersFromNames(names, options = {}) {

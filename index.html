@@ -400,8 +400,12 @@
                     <p class="eyebrow">Chronology</p>
                     <h2>時系列</h2>
                   </div>
-                  <button class="text-button" id="addChronologyEntryButton" type="button">物語を追加</button>
+                  <div class="chronology-header-actions">
+                    <div id="chronologyTrackButtons" class="chronology-track-buttons" aria-label="時系列の切り替え"></div>
+                    <button class="text-button" id="addChronologyEntryButton" type="button">物語を追加</button>
+                  </div>
                 </div>
+                <div id="chronologyTrackNameFields" class="chronology-track-name-fields"></div>
                 <div id="chronologyList" class="chronology-list"></div>
               </div>
 
@@ -420,11 +424,22 @@
                   <span>該当シーン</span>
                   <select id="chronologySceneSelect" class="control"></select>
                 </label>
+                <div class="chronology-character-block">
+                  <span>登場キャラ</span>
+                  <div id="chronologyCharacters" class="chronology-character-list"></div>
+                </div>
                 <label>
                   <span>メモ</span>
                   <textarea id="chronologyNote" class="control short-text"></textarea>
                 </label>
                 <div id="chronologyCustomFields" class="custom-profile-fields"></div>
+                <div class="form-actions delete-actions">
+                  <label class="delete-confirm">
+                    <input id="deleteChronologyConfirm" type="checkbox" />
+                    <span>削除を有効にする</span>
+                  </label>
+                  <button class="text-button danger" id="deleteChronologyButton" type="button">削除</button>
+                </div>
               </form>
             </div>
           </section>

@@ -658,6 +658,37 @@ button {
   min-height: 560px;
 }
 
+.chronology-header-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.chronology-track-buttons {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.chronology-track-button.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.chronology-track-name-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.chronology-track-name-fields label {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+}
+
 .chronology-list {
   display: grid;
   gap: 0;
@@ -731,6 +762,37 @@ button {
 
 .chronology-segment-actions .mini-button {
   min-width: 34px;
+}
+
+.chronology-character-block {
+  display: grid;
+  gap: 6px;
+}
+
+.chronology-character-block > span {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.chronology-character-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 38px;
+}
+
+.character-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.86rem;
+  font-weight: 800;
 }
 
 .chronology-segment-actions svg {
@@ -1550,6 +1612,14 @@ label > span,
 
   .chronology-board {
     min-height: 0;
+  }
+
+  .chronology-header-actions {
+    justify-content: flex-start;
+  }
+
+  .chronology-track-name-fields {
+    grid-template-columns: 1fr;
   }
 
   .chronology-entry,
